@@ -1,19 +1,20 @@
 import ImageEditor from "@react-native-community/image-editor";
 import React, { useEffect, useState } from "react";
 import {
-   Animated,
-   Button,
-   Dimensions,
-   Image,
-   PanResponder,
-   SafeAreaView,
-   Slider,
-   StatusBar,
-   StyleSheet,
-   Text,
-   TextStyle,
-   View,
-   ViewStyle,
+  Animated,
+  Button,
+  Dimensions,
+  Image,
+  PanResponder,
+  PanResponderInstance,
+  SafeAreaView,
+  Slider,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
 } from "react-native";
 import RNFS from "react-native-fs";
 
@@ -21,11 +22,11 @@ const imageURI =
   'https://i0.wp.com/thenewcamera.com/wp-content/uploads/2019/09/Fuji-X-A7-sample-image-1.jpg?resize=730%2C730';
 // const imageURI = 'https://4.img-dpreview.com/files/p/E~TS590x0~articles/3925134721/0266554465.jpeg';
 // const imageURI = 'https://cdn.shopify.com/s/files/1/0100/5302/products/EH028ST_Photo_Web_f912f48f-2834-4a67-a77c-3bd50956df07_grande.jpg?v=1550089716';
-
 const SCREEN_WIDTH = Dimensions.get('screen').width;
 const SCREEN_HEIGHT = Dimensions.get('screen').height;
 const CROP_VIEWPORT_WIDTH = SCREEN_WIDTH;
 const CROP_VIEWPORT_HEIGHT = SCREEN_HEIGHT * 0.6;
+let cropperTransform: Coords;
 
 type Dimms = {
   width: number;
@@ -45,12 +46,9 @@ type CropCoords = {
 };
 
 type CropContainerProps = {
-  animatedValue: Animated.ValueXY;
-  minCoords: Coords;
-  maxCoords: Coords;
-  width: number;
-  height: number;
-  getComputedAnimatedValue: () => Coords;
+  imageDimensions: Dimms;
+  userScaleFactor: number;
+  onFinishMove: (coords: Coords) => void;
 };
 
 const getMinCoords = (imageWidth: number, imageHeight: number) => {
@@ -64,6 +62,16 @@ const getMaxCoords = (imageWidth: number, imageHeight: number) => {
   const y = 0;
 
   return {x, y};
+};
+
+const getCenterCoords = (imageWidth: number, imageHeight: number) => {
+  const minCoords = getMinCoords(imageWidth, imageHeight);
+  const maxCoords = getMaxCoords(imageWidth, imageHeight);
+
+  return {
+    x: (minCoords.x - maxCoords.x) * 0.5,
+    y: (minCoords.y - maxCoords.y) * 0.5,
+  };
 };
 
 const getCropCoordinates = (
@@ -104,19 +112,50 @@ const getScaleFactor = (
   return scaleFactor * userScaleFactor;
 };
 
-// ------------------------------------------------------------
-// CROP CONTAINER
-// ------------------------------------------------------------
-
 const CropContainer: React.FC<CropContainerProps> = ({
-  animatedValue,
-  minCoords,
-  maxCoords,
-  width,
-  height,
-  getComputedAnimatedValue,
+  imageDimensions,
+  userScaleFactor,
+  onFinishMove,
 }) => {
-  const panResponder = PanResponder.create({
+  const {width: imageWidth, height: imageHeight} = imageDimensions;
+  const scaleFactor = getScaleFactor(imageWidth, imageHeight, userScaleFactor);
+  const width = imageWidth * scaleFactor;
+  const height = imageHeight * scaleFactor;
+
+  let minCoords: Coords,
+    maxCoords: Coords,
+    centerCoords: Coords,
+    animatedValue: Animated.ValueXY,
+    panResponder: PanResponderInstance;
+
+  minCoords = getMinCoords(width, height);
+  maxCoords = getMaxCoords(width, height);
+  centerCoords = getCenterCoords(width, height);
+
+  const getComputedAnimatedValue = (): Coords => {
+    return {
+      x: Number((animatedValue.x as any)['_value']),
+      y: Number((animatedValue.y as any)['_value']),
+    };
+  };
+
+  const getComputedTransformValues = (): Coords => {
+    const computedAnimatedValue = getComputedAnimatedValue();
+    const {x, y} = computedAnimatedValue;
+
+    return {
+      x: (1 - Math.abs(x)) * (maxCoords.x - minCoords.x) * -1,
+      y: (1 - Math.abs(y)) * (maxCoords.y - minCoords.y) * -1,
+    };
+  };
+
+  animatedValue = new Animated.ValueXY({x: 0.5, y: 0.5});
+
+  useEffect(() => {
+    onFinishMove(getComputedTransformValues());
+  }, []);
+
+  panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (e, g) => {
@@ -136,29 +175,31 @@ const CropContainer: React.FC<CropContainerProps> = ({
         Animated.spring(animatedValue.x, {
           toValue: 0,
           tension: 1,
-        }).start();
+        }).start(() => onFinishMove(getComputedTransformValues()));
       }
 
       if (computedAnimatedValue.y < 0) {
         Animated.spring(animatedValue.y, {
           toValue: 0,
           tension: 1,
-        }).start();
+        }).start(() => onFinishMove(getComputedTransformValues()));
       }
 
       if (computedAnimatedValue.x > 1) {
         Animated.spring(animatedValue.x, {
           toValue: 1,
           tension: 1,
-        }).start();
+        }).start(() => onFinishMove(getComputedTransformValues()));
       }
 
       if (computedAnimatedValue.y > 1) {
         Animated.spring(animatedValue.y, {
           toValue: 1,
           tension: 1,
-        }).start();
+        }).start(() => onFinishMove(getComputedTransformValues()));
       }
+
+      onFinishMove(getComputedTransformValues());
     },
   });
 
@@ -187,10 +228,6 @@ const CropContainer: React.FC<CropContainerProps> = ({
   );
 };
 
-// ----------------------------------------------------------------
-// CROPPER
-// ----------------------------------------------------------------
-
 const Cropper: React.FC = () => {
   const [imageDimensions, setImageDimensions] = useState<Dimms>();
   const [userScaleFactor, setUserScaleFactor] = useState(1);
@@ -205,41 +242,12 @@ const Cropper: React.FC = () => {
     );
   }, []);
 
-  if (!imageDimensions) {
-    return <Text>Loading</Text>;
-  }
-
-  const animatedValue = new Animated.ValueXY({x: 0.5, y: 0.5});
-  const {width: imageWidth, height: imageHeight} = imageDimensions;
-  const scaleFactor = getScaleFactor(imageWidth, imageHeight, userScaleFactor);
-  const width = imageWidth * scaleFactor;
-  const height = imageHeight * scaleFactor;
-
-  let minCoords: Coords, maxCoords: Coords;
-
-  minCoords = getMinCoords(width, height);
-  maxCoords = getMaxCoords(width, height);
-
-  const getComputedAnimatedValue = (): Coords => {
-    return {
-      x: Number((animatedValue.x as any)['_value']),
-      y: Number((animatedValue.y as any)['_value']),
-    };
+  const handleFinishMove = (coords: Coords) => {
+    cropperTransform = coords;
   };
 
-  const getComputedTransformValues = (): Coords => {
-    const computedAnimatedValue = getComputedAnimatedValue();
-    const {x, y} = computedAnimatedValue;
-
-    return {
-      x: (1 - Math.abs(x)) * (maxCoords.x - minCoords.x) * -1,
-      y: (1 - Math.abs(y)) * (maxCoords.y - minCoords.y) * -1,
-    };
-  };
-
-  const cropImage = async () => {
-    const cropperTransform = getComputedTransformValues();
-    const {x, y} = cropperTransform;
+  const handleCropImage = async () => {
+    const {x, y} = cropperTransform ?? ({} as Coords);
     const scaleFactor = getScaleFactor(
       imageDimensions?.width ?? 0,
       imageDimensions?.height ?? 0,
@@ -269,12 +277,9 @@ const Cropper: React.FC = () => {
         </Text>
         {!!imageDimensions && (
           <CropContainer
-            animatedValue={animatedValue}
-            getComputedAnimatedValue={getComputedAnimatedValue}
-            minCoords={minCoords}
-            maxCoords={maxCoords}
-            width={width}
-            height={height}
+            imageDimensions={imageDimensions}
+            userScaleFactor={userScaleFactor}
+            onFinishMove={handleFinishMove}
           />
         )}
 
@@ -287,7 +292,7 @@ const Cropper: React.FC = () => {
           onValueChange={setUserScaleFactor}
         />
 
-        <Button title="Crop Image" onPress={cropImage}></Button>
+        <Button title="Crop Image" onPress={handleCropImage}></Button>
       </SafeAreaView>
     </>
   );
