@@ -1,31 +1,32 @@
 import ImageEditor from "@react-native-community/image-editor";
 import React, { useEffect, useState } from "react";
 import {
-   Animated,
-   Button,
-   Dimensions,
-   Image,
-   PanResponder,
-   SafeAreaView,
-   Slider,
-   StatusBar,
-   StyleSheet,
-   Text,
-   TextStyle,
-   View,
-   ViewStyle,
+  Animated,
+  Button,
+  Dimensions,
+  Image,
+  PanResponder,
+  SafeAreaView,
+  Slider,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
 } from "react-native";
 import RNFS from "react-native-fs";
 
+// const imageURI = 'https://i0.wp.com/thenewcamera.com/wp-content/uploads/2019/09/Fuji-X-A7-sample-image-1.jpg?resize=730%2C730';
 const imageURI =
-  'https://i0.wp.com/thenewcamera.com/wp-content/uploads/2019/09/Fuji-X-A7-sample-image-1.jpg?resize=730%2C730';
-// const imageURI = 'https://4.img-dpreview.com/files/p/E~TS590x0~articles/3925134721/0266554465.jpeg';
+  'https://4.img-dpreview.com/files/p/E~TS590x0~articles/3925134721/0266554465.jpeg';
 // const imageURI = 'https://cdn.shopify.com/s/files/1/0100/5302/products/EH028ST_Photo_Web_f912f48f-2834-4a67-a77c-3bd50956df07_grande.jpg?v=1550089716';
 
 const SCREEN_WIDTH = Dimensions.get('screen').width;
 const SCREEN_HEIGHT = Dimensions.get('screen').height;
 const CROP_VIEWPORT_WIDTH = SCREEN_WIDTH;
-const CROP_VIEWPORT_HEIGHT = SCREEN_HEIGHT * 0.6;
+const CROP_VIEWPORT_HEIGHT = SCREEN_WIDTH;
+const CROP_VIEWPORT_PADDING = 20;
 
 type Dimms = {
   width: number;
@@ -72,10 +73,12 @@ const getCropCoordinates = (
   scaleFactor: number,
 ): CropCoords => {
   return {
-    x: x * (1 / scaleFactor) * -1,
-    y: y * (1 / scaleFactor) * -1,
-    width: (CROP_VIEWPORT_WIDTH * 1) / scaleFactor,
-    height: (CROP_VIEWPORT_HEIGHT * 1) / scaleFactor,
+    x: x * (1 / scaleFactor) * -1 + CROP_VIEWPORT_PADDING / scaleFactor,
+    y: y * (1 / scaleFactor) * -1 + CROP_VIEWPORT_PADDING / scaleFactor,
+    width:
+      (CROP_VIEWPORT_WIDTH - CROP_VIEWPORT_PADDING * 2) * (1 / scaleFactor),
+    height:
+      (CROP_VIEWPORT_HEIGHT - CROP_VIEWPORT_PADDING * 2) * (1 / scaleFactor),
   };
 };
 
@@ -164,6 +167,11 @@ const CropContainer: React.FC<CropContainerProps> = ({
 
   return (
     <View style={styles.container}>
+      {/* <Image style={{
+           transform: [
+              {rotate: "90"}
+           ]
+        }} source={} /> */}
       <Animated.Image
         style={{
           width,
@@ -183,6 +191,7 @@ const CropContainer: React.FC<CropContainerProps> = ({
         source={{uri: imageURI}}
         {...panResponder.panHandlers}
       />
+      <View pointerEvents="none" style={styles.overlay}></View>
     </View>
   );
 };
@@ -308,6 +317,17 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   slider: {
     marginBottom: 15,
+  } as ViewStyle,
+  overlay: {
+    backgroundColor: 'rgba(255,255,255,.35)',
+    width: CROP_VIEWPORT_WIDTH - CROP_VIEWPORT_PADDING * 2,
+    height: CROP_VIEWPORT_HEIGHT - CROP_VIEWPORT_PADDING * 2,
+    top: CROP_VIEWPORT_PADDING,
+    left: CROP_VIEWPORT_PADDING,
+    borderRadius: CROP_VIEWPORT_PADDING * 2,
+    borderWidth: 4,
+    borderColor: 'white',
+    borderStyle: 'dotted',
   } as ViewStyle,
 });
 
